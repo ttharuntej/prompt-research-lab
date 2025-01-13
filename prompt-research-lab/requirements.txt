@@ -1,0 +1,17 @@
+# Core dependencies
+crewai==0.95.0
+openai==1.59.6
+groq==0.4.2
+python-dotenv==1.0.1
+
+# LangChain dependencies
+langchain==0.3.14
+langchain-groq==0.2.3
+
+# Pydantic and related
+pydantic==2.10.5
+tokenizers==0.20.3
+
+# Optional development dependencies
+pytest>=7.4.0  # For testing
+black>=23.0.0  # For code formatting

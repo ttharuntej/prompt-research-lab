@@ -1,0 +1,13 @@
+# Ignore .env files
+.env
+*.env
+!.env.example
+
+# Common Python ignores
+__pycache__/
+*.py[cod]
+*$py.class
+.Python
+env/
+venv/
+.env/ 
