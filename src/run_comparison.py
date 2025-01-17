@@ -14,25 +14,28 @@ def main():
     if not os.getenv('GROQ_API_KEY'):
         raise ValueError("GROQ_API_KEY not found in environment variables")
     
-    # Create task with  input/output format
+  # Create task with input/output format
     task = Task(
-        description="Compare how OpenAI and Groq handle this prompt",
+        description=(
+            "Compare how OpenAI and Groq handle this prompt: {prompt}."
+            " Provide a comparison analysis including response content and quality metrics."
+        ),
         agent=comparison_agent,
-        # Pass the prompt directly as a string
-        input="Explain the concept of prompt engineering in three paragraphs.",
-        expected_output="""A comparison analysis between OpenAI and Groq responses, 
-        including response content and quality metrics."""  # Added this required field
+        expected_output=(
+            "A comparison analysis between OpenAI and Groq responses, "
+            "including response content and quality metrics."
+        )
     )
-    
+
     # Create crew
     crew = Crew(
         agents=[comparison_agent],
         tasks=[task]
     )
-    
-    # Execute
-    result = crew.kickoff()
-    
+
+    # Execute with dynamic input
+    result = crew.kickoff(inputs={'prompt': 'Explain the concept of prompt engineering in three paragraphs.'})
+ 
     print("\nTest Results:")
     print("=============")
     print(result)
