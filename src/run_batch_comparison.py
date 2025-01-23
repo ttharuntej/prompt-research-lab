@@ -4,10 +4,22 @@ from datetime import datetime
 from crewai import Crew, Task
 from dotenv import load_dotenv
 from agents.model_comparison_agent import comparison_agent
+import logging
+import warnings
+from opentelemetry import trace
+from opentelemetry.sdk.trace import TracerProvider
 
 # Configuration
 BATCH_SIZE = 10  # Number of questions to process in one run
 OUTPUT_FILE = "failed_comparisons.json"
+
+# Add at the start of the file, after imports
+logging.getLogger('opentelemetry').setLevel(logging.ERROR)
+# or
+warnings.filterwarnings('ignore', message='Overriding of current TracerProvider is not allowed')
+
+# Initialize the TracerProvider once
+trace.set_tracer_provider(TracerProvider())
 
 def load_eval_data(limit=BATCH_SIZE):
     """Load evaluation data from JSON file"""
