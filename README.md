@@ -99,3 +99,70 @@ The comparison results include:
 - python-dotenv
 - langchain
 - pydantic
+
+## Contributing
+
+We welcome contributions to the Prompt Research Lab! Here's how you can contribute:
+
+1. **Fork the Repository**
+   - Click the 'Fork' button at the top right of this repository
+   - Clone your fork locally:
+     ```bash
+     git clone https://github.com/your-username/prompt-research-lab.git
+     ```
+
+2. **Set Up Development Environment**
+   - Follow the setup instructions above to create your environment and install dependencies
+   - Make sure to create your own `.env` file with your API keys
+
+3. **Create a New Branch**
+   ```bash
+   git checkout -b feature/your-feature-name
+   # or
+   git checkout -b fix/your-fix-name
+   ```
+
+4. **Make Your Changes**
+   - Write clean, documented code
+   - Follow the existing code style and structure
+   - Add tests if applicable
+   - Update documentation as needed
+
+5. **Test Your Changes**
+   - Ensure all existing tests pass
+   - Test your new features thoroughly
+
+6. **Commit Your Changes**
+   ```bash
+   git add .
+   git commit -m "Description of your changes"
+   ```
+
+7. **Push to Your Fork**
+   ```bash
+   git push origin feature/your-feature-name
+   ```
+
+8. **Submit a Pull Request**
+   - Go to the original repository on GitHub
+   - Click 'New Pull Request'
+   - Select your fork and branch
+   - Provide a clear description of your changes
+   - Link any relevant issues
+
+### Contribution Guidelines
+
+- Keep pull requests focused on a single feature or fix
+- Follow Python best practices and PEP 8 style guidelines
+- Include docstrings and comments where appropriate
+- Update the README if you're adding new features or changing functionality
+- Be respectful and constructive in discussions
+
+### Need Help?
+
+If you have questions or need help with your contribution:
+- Open an issue for discussion
+- Comment on the relevant issue or pull request
+- Reach out to the maintainers
+
+Thank you for contributing to Prompt Research Lab!
