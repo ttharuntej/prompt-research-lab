@@ -111,5 +111,5 @@ comparison_agent = Agent(
     You help researchers and developers understand the nuances between different LLMs 
     and their response patterns.""",
     tools=[model_comparison_tool],
-    verbose=True
+    # verbose=True
 )
