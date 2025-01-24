@@ -10,12 +10,38 @@ from schemas.comparison_schema import (
     MisspellingInfo, TestResults, ModelResponse, ModelDetail,
     ComparisonResult
 )
+import ijson  # Add to requirements.txt
 
-def load_eval_data(limit=settings.BATCH_SIZE):
-    """Load evaluation data from JSON file"""
-    with open('eval_data.json', 'r') as f:
-        data = json.load(f)
-        return data['rows'][:limit]
+def load_eval_data(batch_size=settings.BATCH_SIZE, total_limit=None):
+    """Stream evaluation data from JSON file in batches
+    
+    Args:
+        batch_size: Number of items to process in each batch
+        total_limit: Maximum total items to process (None for all)
+    """
+    current_batch = []
+    total_processed = 0
+    
+    with open('eval_data.json', 'rb') as f:
+        parser = ijson.items(f, 'rows.item')
+        
+        for row in parser:
+            if total_limit and total_processed >= total_limit:
+                # Yield remaining items in batch before stopping
+                if current_batch:
+                    yield current_batch
+                break
+                
+            current_batch.append(row)
+            total_processed += 1
+            
+            if len(current_batch) == batch_size:
+                yield current_batch
+                current_batch = []
+    
+    # Yield any remaining items
+    if current_batch:
+        yield current_batch
 
 def extract_answer(text):
     import re
@@ -237,50 +263,56 @@ def run_comparison():
     misspelling_gen = MisspellingGenerator()
     
     # Load evaluation data
-    eval_data = load_eval_data()
+    eval_data = load_eval_data(
+        batch_size=settings.BATCH_SIZE,
+        total_limit=settings.TOTAL_ITEMS
+    )
     comparison_records = []
     
-    print(f"\nProcessing {len(eval_data)} questions...")
+    print("\nProcessing questions...")
+    processed_count = 0
     
-    for row in eval_data:
-        row_idx = row['row_idx']
-        question = row['row']['input_query']
-        expected_answer = row['row']['expected_answer']
-        
-        # Generate misspelled variant
-        misspelled_question, char_changes = misspelling_gen.generate_variant(
-            question,
-            severity=settings.MISSPELLING_SEVERITY,
-            return_changes=True
-        )
-        
-        # Test both variants
-        original_results = run_model_comparison(question)
-        misspelled_results = run_model_comparison(misspelled_question)
-        
-        # Create record
-        record = create_comparison_record(
-            row_idx=row_idx,
-            original_q=question,
-            misspelled_q=misspelled_question,
-            expected_answer=expected_answer,
-            original_results=original_results,
-            misspelled_results=misspelled_results,
-            misspelling_info={
-                "char_change_count": char_changes,
-                "severity": settings.MISSPELLING_SEVERITY
-            }
-        )
-        
-        comparison_records.append(record.model_dump(mode='json'))
-        
-        # Save results periodically
-        if len(comparison_records) % 5 == 0:
-            save_results(comparison_records)
+    for batch in eval_data:
+        for row in batch:
+            processed_count += 1
+            print(f"Processing question {processed_count}...", end='\r')
+            
+            row_idx = row['row_idx']
+            question = row['row']['input_query']
+            expected_answer = row['row']['expected_answer']
+            
+            # Generate misspelled variant
+            misspelled_question, char_changes = misspelling_gen.generate_variant(
+                question,
+                severity=settings.MISSPELLING_SEVERITY,
+                return_changes=True
+            )
+            
+            # Test both variants
+            original_results = run_model_comparison(question)
+            misspelled_results = run_model_comparison(misspelled_question)
+            
+            # Create record
+            record = create_comparison_record(
+                row_idx=row_idx,
+                original_q=question,
+                misspelled_q=misspelled_question,
+                expected_answer=expected_answer,
+                original_results=original_results,
+                misspelled_results=misspelled_results,
+                misspelling_info={
+                    "char_change_count": char_changes,
+                    "severity": settings.MISSPELLING_SEVERITY
+                }
+            )
+            
+            comparison_records.append(record.model_dump(mode='json'))
+            
+        # Save after each batch
+        save_results(comparison_records)
     
-    # Final save
-    save_results(comparison_records)
-    print(f"\nResults saved to {settings.OUTPUT_FILE}")
+    print(f"\nCompleted processing {processed_count} questions")
+    print(f"Results saved to {settings.OUTPUT_FILE}")
 
 def save_results(records: list):
     """Save comparison records to output file"""
