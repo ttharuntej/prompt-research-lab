@@ -166,3 +166,32 @@ If you have questions or need help with your contribution:
 - Reach out to the maintainers
 
 Thank you for contributing to Prompt Research Lab!
+
+## Configuration
+
+The application uses Pydantic Settings for configuration management. Configuration can be set through environment variables or a `.env` file.
+
+### Required Settings
+- `OPENAI_API_KEY`: Your OpenAI API key
+- `GROQ_API_KEY`: Your Groq API key
+
+### Optional Settings
+- `DEFAULT_MODEL`: OpenAI model to use (default: "gpt-3.5-turbo")
+- `GROQ_MODEL`: Groq model to use (default: "llama-3.3-70b-versatile")
+- `MAX_TOKENS`: Maximum tokens for model responses (default: 1000)
+- `BATCH_SIZE`: Number of questions to process in one batch (default: 10)
+- `OUTPUT_FILE`: File to save failed comparisons (default: "failed_comparisons.json")
+
+### Environment Variables
+Create a `.env` file in the root directory:
+```env
+OPENAI_API_KEY=your-openai-api-key
+GROQ_API_KEY=your-groq-api-key
+
+# Optional settings
+DEFAULT_MODEL=gpt-3.5-turbo
+MAX_TOKENS=1000
+BATCH_SIZE=10
+```
+
+The application is flexible with additional environment variables and is case-insensitive.

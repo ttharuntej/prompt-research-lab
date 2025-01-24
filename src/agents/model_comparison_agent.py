@@ -6,6 +6,7 @@ from langchain.tools import Tool
 from openai import OpenAI
 import groq
 from pydantic import BaseModel, Field
+from src.config import settings  # Import settings
 
 # Load environment variables
 load_dotenv()
@@ -21,21 +22,21 @@ class PromptComparisonSchema(BaseModel):
 
 def get_openai_response(prompt: str) -> str:
     """Get response from OpenAI's model"""
-    client = OpenAI(api_key=os.getenv('OPENAI_API_KEY'))
+    client = OpenAI(api_key=settings.OPENAI_API_KEY)
     response = client.chat.completions.create(
-        model="gpt-3.5-turbo",
+        model=settings.OPENAI_MODEL,  # Use from settings
         messages=[{"role": "user", "content": prompt}],
-        max_tokens=1000
+        max_tokens=settings.MAX_TOKENS  # Use from settings
     )
     return response.choices[0].message.content
 
 def get_groq_response(prompt: str) -> str:
     """Get response from Groq"""
-    client = groq.Groq(api_key=os.getenv('GROQ_API_KEY'))
+    client = groq.Groq(api_key=settings.GROQ_API_KEY)
     response = client.chat.completions.create(
-        model="llama-3.3-70b-versatile",
+        model=settings.GROQ_MODEL,  # Use from settings
         messages=[{"role": "user", "content": prompt}],
-        max_tokens=1000
+        max_tokens=settings.MAX_TOKENS  # Use from settings
     )
     return response.choices[0].message.content
 
@@ -111,5 +112,5 @@ comparison_agent = Agent(
     You help researchers and developers understand the nuances between different LLMs 
     and their response patterns.""",
     tools=[model_comparison_tool],
-    # verbose=True
+    verbose=True
 )
