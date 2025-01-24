@@ -1,80 +1,87 @@
-import os
-from dotenv import load_dotenv
-from openai import OpenAI
-import json
-import groq
-import torch
-from pydantic import BaseModel, Field
+from typing import Dict, List, Optional, Union, Tuple
+from enum import Enum
 import random
-import langchain
+from config import settings
 
+SEVERITY_MAPPING = {
+    "light": 0.1,
+    "medium": 0.2,
+    "severe": 0.4
+}
 
-# Load Environment Variables
-load_dotenv()
+class MisspellingStrategy(Enum):
+    RANDOM_CHAR = "random_char"
+    COMMON_TYPOS = "common_typos"
+    KEYBOARD_PROXIMITY = "keyboard_proximity"
 
-# Define a function to introduce misspellings
-def introduce_misspellings(text, num_misspellings):
-    # Randomly replace characters in the text
-    misspelled_text = ""
-    for char in text:
-        if random.random() < num_misspellings / len(text):
-            misspelled_text += chr(random.randint(ord('a'), ord('z')))
-        else:
-            misspelled_text += char
-    return misspelled_text
+class MisspellingGenerator:
+    def __init__(self):
+        # Common keyboard-proximity typos
+        self.keyboard_proximity = {
+            'a': 'qwsz', 'b': 'vghn', 'c': 'xdfv', 'd': 'srfce',
+            'e': 'wrsdf', 'f': 'dcvgt', 'g': 'fvbht', 'h': 'gbnjy',
+            'i': 'ujko', 'j': 'huknm', 'k': 'jilm', 'l': 'kop',
+            'm': 'njk', 'n': 'bhjm', 'o': 'iklp', 'p': 'ol',
+            'q': 'wa', 'r': 'edft', 's': 'awdzx', 't': 'rfgy',
+            'u': 'yihj', 'v': 'cfgb', 'w': 'qase', 'x': 'zsdc',
+            'y': 'tghu', 'z': 'asx'
+        }
+        
+        # Common typos/misspellings
+        self.common_typos = {
+            'the': ['teh', 'hte', 'th'],
+            'and': ['adn', 'nad', 'an'],
+            'to': ['too', 'tp', 't'],
+            'of': ['fo', 'ff', 'f'],
+            'in': ['ni', 'inn', 'n'],
+            'that': ['taht', 'tht', 'tha'],
+            'is': ['si', 'iz', 'i'],
+            'for': ['fro', 'fr', 'fo']
+        }
 
-# Define the functions to get responses from OpenAI and LLaMA
-def get_openai_response(prompt: str) -> str:
-    """Get response from OpenAI's model"""
-    client = OpenAI(api_key=os.getenv('OPENAI_API_KEY'))
-    response = client.chat.completions.create(
-        model="gpt-3.5-turbo",
-        messages=[{"role": "user", "content": prompt}],
-        max_tokens=1000
-    )
-    return response.choices[0].message.content
+        self.severity = SEVERITY_MAPPING.get(
+            settings.MISSPELLING_SEVERITY.lower(), 
+            0.2  # default to medium if unknown
+        )
 
-
-def get_groq_response(prompt: str) -> str:
-    """Get response from Groq"""
-    client = groq.Groq(api_key=os.getenv('GROQ_API_KEY'))
-    response = client.chat.completions.create(
-        model="llama-3.3-70b-versatile",
-        messages=[{"role": "user", "content": prompt}],
-        max_tokens=1000
-    )
-    return response.choices[0].message.content
-
-# Define the test data
-test_data = [
-    {"input": "How many stars are there on the flag of the united states of America", "output": "There are 50 stars on the flag of the United States of America"},
-    # Add more test data here...
-]
-
-# Introduce misspellings into the test data
-misspelled_test_data = []
-for item in test_data:
-    misspelled_input = introduce_misspellings(item["input"], 2)
-    misspelled_test_data.append({"input": misspelled_input, "output": item["output"]})
-
-# Get the responses from OpenAI and LLaMA
-openai_responses = [get_openai_response(item["input"]) for item in misspelled_test_data]
-llama_responses = [get_groq_response(item["input"]) for item in misspelled_test_data]
-
-# Get the responses from OpenAI and LLaMA
-openai_responses = [get_openai_response(item["input"]) for item in misspelled_test_data]
-llama_responses = [get_groq_response(item["input"]) for item in misspelled_test_data]
-# Calculate the accuracy
-openai_accuracy = sum(1 for i, response in enumerate(openai_responses) if response.strip().lower() == misspelled_test_data[i]["output"].strip().lower()) / len(misspelled_test_data)
-llama_accuracy = sum(1 for i, response in enumerate(llama_responses) if response.strip().lower() == misspelled_test_data[i]["output"].strip().lower()) / len(misspelled_test_data)
-print("OpenAI Accuracy:", openai_accuracy)
-print("LLaMA Accuracy:", llama_accuracy)
-
-# Print out the input, output, and model responses for each test case
-for i, item in enumerate(misspelled_test_data):
-    print(f"Test Case {i+1}:")
-    print(f"Input: {item['input']}")
-    print(f"Expected Output: {item['output']}")
-    print(f"OpenAI Response: {openai_responses[i]}")
-    print(f"LLaMA Response: {llama_responses[i]}")
-    print()
+    def generate_variant(
+        self, 
+        text: str, 
+        severity: Union[float, str] = None,
+        strategy: MisspellingStrategy = MisspellingStrategy.RANDOM_CHAR,
+        return_changes: bool = False
+    ) -> Union[str, Tuple[str, int]]:
+        """
+        Generate a misspelled variant of the input text
+        
+        Args:
+            text: Input text to modify
+            severity: How severe the misspellings should be (0.0 to 1.0)
+            strategy: Which misspelling strategy to use
+            return_changes: Whether to return the count of changed characters
+            
+        Returns:
+            If return_changes is False: misspelled text
+            If return_changes is True: tuple of (misspelled text, number of changes)
+        """
+        # Use provided severity or instance default
+        use_severity = (
+            SEVERITY_MAPPING.get(severity.lower(), 0.2) 
+            if isinstance(severity, str) 
+            else severity if isinstance(severity, float)
+            else self.severity
+        )
+        
+        misspelled_text = ""
+        char_changes = 0
+        
+        for char in text:
+            if random.random() < use_severity and char.isalpha():
+                misspelled_text += random.choice('abcdefghijklmnopqrstuvwxyz')
+                char_changes += 1
+            else:
+                misspelled_text += char
+                
+        if return_changes:
+            return misspelled_text, char_changes
+        return misspelled_text
