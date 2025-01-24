@@ -3,7 +3,13 @@ from datetime import datetime
 from dotenv import load_dotenv
 from crewai import Crew, Task
 from agents.model_comparison_agent import comparison_agent
+from agents.model_misspelling_stability import MisspellingGenerator
 from config import settings
+from schemas.comparison_schema import (
+    ComparisonRecord, ComparisonOutcome, QuestionPair,
+    MisspellingInfo, TestResults, ModelResponse, ModelDetail,
+    ComparisonResult
+)
 
 def load_eval_data(limit=settings.BATCH_SIZE):
     """Load evaluation data from JSON file"""
@@ -75,12 +81,13 @@ def create_comparison_task(question: str) -> Task:
         expected_output="Comparison of model responses, each including 'Answer: X' format"
     )
 
-def create_failure_record(question: str, expected_answer: str, openai_answer=None, groq_answer=None, error=None):
+def create_failure_record(question: str, expected_answer: str, openai_answer=None, groq_answer=None, error=None, is_misspelled=False):
     """Create a standardized failure record for both error cases and answer mismatches"""
     record = {
         'timestamp': datetime.now().isoformat(),
         'question': question,
         'expected_answer': expected_answer,
+        'is_misspelled': is_misspelled,  # Track if this was a misspelled variant
     }
     
     if error:
@@ -117,74 +124,168 @@ def check_model_answers(openai_answer: str, groq_answer: str, expected_answer: s
         
     return True, f"✅ Both models correct with answer {expected_answer}"
 
+def determine_outcome(openai_correct: bool, groq_correct: bool, 
+                     openai_answered: bool, groq_answered: bool) -> ComparisonOutcome:
+    """Determine the comparison outcome based on model performances"""
+    if not openai_answered and not groq_answered:
+        return ComparisonOutcome.NEITHER_ANSWERED
+    if openai_correct and groq_correct:
+        return ComparisonOutcome.BOTH_CORRECT
+    if not openai_correct and not groq_correct:
+        return ComparisonOutcome.BOTH_INCORRECT
+    if openai_correct:
+        return ComparisonOutcome.OPENAI_ONLY_CORRECT
+    return ComparisonOutcome.GROQ_ONLY_CORRECT
+
+def create_comparison_record(row_idx: int, original_q: str, misspelled_q: str, 
+                           expected_answer: str, 
+                           original_results: dict, misspelled_results: dict,
+                           misspelling_info: dict) -> ComparisonRecord:
+    """Create a structured comparison record"""
+    
+    def create_test_results(results: dict) -> TestResults:
+        openai_answer = results.get('openai_answer')
+        groq_answer = results.get('groq_answer')
+        
+        # Create model responses
+        model_responses = {
+            "openai": ModelResponse(
+                answer=openai_answer,
+                failed=openai_answer is None
+            ),
+            "groq": ModelResponse(
+                answer=groq_answer,
+                failed=groq_answer is None
+            )
+        }
+        
+        # Determine correctness
+        openai_correct = openai_answer == expected_answer
+        groq_correct = groq_answer == expected_answer
+        openai_answered = openai_answer is not None
+        groq_answered = groq_answer is not None
+        
+        # Create comparison result
+        comparison_result = ComparisonResult(
+            models_agree=openai_answer == groq_answer,
+            outcome=determine_outcome(openai_correct, groq_correct, 
+                                   openai_answered, groq_answered),
+            details={
+                "openai": ModelDetail(
+                    is_correct=openai_correct,
+                    provided_answer=openai_answered
+                ),
+                "groq": ModelDetail(
+                    is_correct=groq_correct,
+                    provided_answer=groq_answered
+                )
+            }
+        )
+        
+        return TestResults(
+            model_responses=model_responses,
+            comparison_result=comparison_result
+        )
+    
+    return ComparisonRecord(
+        timestamp=datetime.now().isoformat(),
+        row_idx=row_idx,
+        question_pair=QuestionPair(
+            text={
+                "original": original_q,
+                "misspelled": misspelled_q
+            },
+            expected_answer=expected_answer
+        ),
+        misspelling_info=MisspellingInfo(
+            char_change_count=misspelling_info["char_change_count"],
+            severity=misspelling_info["severity"]
+        ),
+        results={
+            "original": create_test_results(original_results),
+            "misspelled": create_test_results(misspelled_results)
+        }
+    )
+
+def run_model_comparison(question: str) -> dict:
+    """Run comparison between models and return their answers"""
+    try:
+        task = create_comparison_task(question)
+        crew = Crew(agents=[comparison_agent], tasks=[task])
+        result = crew.kickoff()
+        raw_output = result.tasks_output[0].raw
+        
+        openai_answer, groq_answer = extract_answer(raw_output)
+        return {
+            'openai_answer': openai_answer,
+            'groq_answer': groq_answer
+        }
+    except Exception as e:
+        print(f"❌ Error in comparison: {str(e)}")
+        return {
+            'openai_answer': None,
+            'groq_answer': None
+        }
+
 def run_comparison():
     # Load environment variables and verify API keys
     load_dotenv()
     if not settings.OPENAI_API_KEY or not settings.GROQ_API_KEY:
         raise ValueError("Missing API keys in environment variables")
 
-    # 1. Load evaluation data
+    # Initialize misspelling generator
+    misspelling_gen = MisspellingGenerator()
+    
+    # Load evaluation data
     eval_data = load_eval_data()
-    failed_comparisons = []
-    total = len(eval_data)
-    passed = 0
+    comparison_records = []
     
-    print(f"\nProcessing {total} questions...")
+    print(f"\nProcessing {len(eval_data)} questions...")
     
-    for idx, row in enumerate(eval_data, 1):
+    for row in eval_data:
+        row_idx = row['row_idx']
         question = row['row']['input_query']
         expected_answer = row['row']['expected_answer']
         
-        print(f"\n{'='*50}")
-        print(f"Question {idx}/{total}")
-        print(f"Question text: {question}")
-        print(f"Expected answer: {expected_answer}")
-        print(f"{'='*50}")
+        # Generate misspelled variant
+        misspelled_question, char_changes = misspelling_gen.generate_variant(
+            question,
+            severity=settings.MISSPELLING_SEVERITY,
+            return_changes=True
+        )
         
-        try:
-            task = create_comparison_task(question)
-            crew = Crew(agents=[comparison_agent], tasks=[task])
-            result = crew.kickoff() 
-            raw_output = result.tasks_output[0].raw
-            print("\n📝 Model Responses:")
-            print(raw_output)
-            
-            # Write raw model responses to file
-            with open('model_responses.txt', 'a') as f:
-                f.write(raw_output)
-                f.write("\n")
-            
-            openai_answer, groq_answer = extract_answer(raw_output)
-            print("OpenAI Answer:", openai_answer)
-            print("Groq Answer:", groq_answer)
-            
-            is_correct, message = check_model_answers(openai_answer, groq_answer, expected_answer)
-            print(message)
-            
-            if not is_correct:
-                failed_comparisons.append(
-                    create_failure_record(question, expected_answer, openai_answer, groq_answer)
-                )
-            else:
-                passed += 1
-                
-        except Exception as e:
-            print(f"❌ Error processing question: {str(e)}")
-            failed_comparisons.append(
-                create_failure_record(question, expected_answer, error=e)
-            )
+        # Test both variants
+        original_results = run_model_comparison(question)
+        misspelled_results = run_model_comparison(misspelled_question)
+        
+        # Create record
+        record = create_comparison_record(
+            row_idx=row_idx,
+            original_q=question,
+            misspelled_q=misspelled_question,
+            expected_answer=expected_answer,
+            original_results=original_results,
+            misspelled_results=misspelled_results,
+            misspelling_info={
+                "char_change_count": char_changes,
+                "severity": settings.MISSPELLING_SEVERITY
+            }
+        )
+        
+        comparison_records.append(record.model_dump(mode='json'))
+        
+        # Save results periodically
+        if len(comparison_records) % 5 == 0:
+            save_results(comparison_records)
+    
+    # Final save
+    save_results(comparison_records)
+    print(f"\nResults saved to {settings.OUTPUT_FILE}")
 
-    # Print summary and save results
-    print("\n=== Summary ===")
-    print(f"Total questions: {total}")
-    print(f"Passed: {passed}")
-    print(f"Failed: {total - passed}")
-    print(f"Success rate: {(passed/total)*100:.1f}%")
-
-    if failed_comparisons:
-        with open(settings.OUTPUT_FILE, 'w') as f:
-            json.dump(failed_comparisons, f, indent=2)
-        print(f"\nFailed comparisons saved to {settings.OUTPUT_FILE}")
+def save_results(records: list):
+    """Save comparison records to output file"""
+    with open(settings.OUTPUT_FILE, 'w') as f:
+        json.dump(records, f, indent=2)
 
 if __name__ == "__main__":
     run_comparison() 
