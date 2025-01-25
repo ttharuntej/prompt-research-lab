@@ -170,30 +170,28 @@ def create_comparison_record(row_idx: int, original_q: str, misspelled_q: str,
     """Create a structured comparison record"""
     
     def create_test_results(results: dict) -> TestResults:
-        openai_answer = results.get('openai_answer')
-        groq_answer = results.get('groq_answer')
-        
-        # Create model responses
         model_responses = {
             "openai": ModelResponse(
-                answer=openai_answer,
-                failed=openai_answer is None
+                answer=results.get('openai_answer'),
+                failed=results.get('openai_answer') is None,
+                model_name=settings.OPENAI_MODEL
             ),
             "groq": ModelResponse(
-                answer=groq_answer,
-                failed=groq_answer is None
+                answer=results.get('groq_answer'),
+                failed=results.get('groq_answer') is None,
+                model_name=settings.GROQ_MODEL
             )
         }
         
         # Determine correctness
-        openai_correct = openai_answer == expected_answer
-        groq_correct = groq_answer == expected_answer
-        openai_answered = openai_answer is not None
-        groq_answered = groq_answer is not None
+        openai_correct = results.get('openai_answer') == expected_answer
+        groq_correct = results.get('groq_answer') == expected_answer
+        openai_answered = results.get('openai_answer') is not None
+        groq_answered = results.get('groq_answer') is not None
         
         # Create comparison result
         comparison_result = ComparisonResult(
-            models_agree=openai_answer == groq_answer,
+            models_agree=results.get('openai_answer') == results.get('groq_answer'),
             outcome=determine_outcome(openai_correct, groq_correct, 
                                    openai_answered, groq_answered),
             details={
