@@ -95,6 +95,7 @@ def compare_models(prompt: str) -> Dict[str, Any]:
         # Get responses from both models
         openai_resp = get_openai_response(prompt)
         groq_resp = get_groq_response(prompt)
+        bedrock_resp = get_bedrock_response(prompt)
 
         # Analyze responses
         analysis = {
