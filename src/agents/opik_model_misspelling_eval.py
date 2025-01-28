@@ -11,6 +11,7 @@ from typing import Any
 from opik import Opik
 from opik.evaluation import evaluate
 from opik.evaluation.metrics import score_result
+import boto3
 
 # Load Environment Variables
 load_dotenv()
@@ -50,6 +51,40 @@ def get_groq_response(prompt: str) -> str:
     )
     return response.choices[0].message.content
 
+def get_bedrock_response(prompt: str) -> str:
+    """Get response from Claude LLM via AWS Bedrock"""
+    bedrock = boto3.client('bedrock-runtime',
+                            aws_access_key_id=os.getenv('AWS_ACCESS_KEY_ID'),
+                            aws_secret_access_key=os.getenv('AWS_SECRET_ACCESS_KEY'),
+                            region_name=os.getenv('AWS_REGION_NAME'))
+
+    #input payload for the model
+    request = {
+        "anthropic_version":"bedrock-2023-05-31",
+        "max_tokens": 1000 ,
+        "messages":[
+            {
+                "role": "user",
+                "content": [{"type": "text", "text": prompt}],
+            }
+        ],
+    }
+    #convert the request to json
+    request = json.dumps(request)
+
+    #invoke the model with the request
+    response = bedrock.invoke_model_with_response_stream(
+        modelId=os.getenv('CLAUDE_MODEL_ID'),
+        body=request
+    )
+    # Extract and print the response text in real-time
+    response_text = ""
+    for event in response["body"]:
+        chunk = json.loads(event["chunk"]["bytes"])
+        if chunk["type"] == "content_block_delta":
+            response_text += chunk["delta"].get("text", "")
+    return response_text
+
 
 # Define the test data
 test_data = [
@@ -63,6 +98,7 @@ misspelled_test_data = []
 for item in test_data:
     misspelled_input = introduce_misspellings(item["input"], 2)
     misspelled_test_data.append({"input": misspelled_input, "output": item["output"]})
+    break
 
 
 # Get the responses from OpenAI and LLaMA
@@ -87,7 +123,8 @@ def evaluation_task(dataset_item):
     # your LLM application is called here
 
     input = dataset_item["input"]
-    output = get_openai_response(input)  # Replace with your actual model response
+    #output = get_openai_response(input)  # Replace with your actual model response
+    output = get_bedrock_response(input)  # Replace with your actual model response
 
     result = {
         "input": input,
