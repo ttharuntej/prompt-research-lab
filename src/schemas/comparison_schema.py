@@ -1,7 +1,7 @@
 from pydantic import BaseModel, Field
 from typing import Dict, Optional
 from enum import Enum
-from config import settings
+from src.config import settings
 
 class ComparisonOutcome(Enum):
     BOTH_CORRECT = "BOTH_CORRECT"

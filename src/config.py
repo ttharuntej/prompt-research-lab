@@ -8,11 +8,11 @@ class Settings(BaseSettings):
     GROQ_API_KEY: str
     
     # Optional Settings with defaults
-    OPENAI_MODEL: str = "gpt-3.5-turbo"
+    OPENAI_MODEL: str = "gpt-4o"
     GROQ_MODEL: str = "llama-3.3-70b-versatile"
     MAX_TOKENS: int = 1000
     BATCH_SIZE: int = 2
-    TOTAL_ITEMS: Optional[int] = 3  # None means process all items
+    TOTAL_ITEMS: Optional[int] = None  # None means process all items
     OUTPUT_FILE: str = "model_comparison_results.json"
     
     # New Robustness Testing Settings

@@ -1,7 +1,7 @@
 from typing import List, Dict
 import plotly.graph_objects as go
 import plotly.express as px
-from ..schemas.comparison_schema import ComparisonOutcome
+from src.schemas.comparison_schema import ComparisonOutcome
 from plotly.subplots import make_subplots
 
 def create_model_performance_chart(data: List[Dict]) -> go.Figure:
@@ -54,15 +54,14 @@ def create_model_performance_chart(data: List[Dict]) -> go.Figure:
         title=f'Model Performance Comparison (n={stats["original"]["total"]} samples)',
         yaxis_title='Accuracy (%)',
         barmode='group',
-        height=600,
-        margin=dict(t=100, b=100),
+        height=500,
+        showlegend=True,
         legend=dict(
-            orientation="h",
-            yanchor="bottom",
-            y=-0.3,
-            xanchor="center",
-            x=0.5,
-            bgcolor='rgba(255, 255, 255, 0.9)'
+            yanchor="top",
+            y=0.99,
+            xanchor="left",
+            x=0.01,
+            bgcolor='rgba(255, 255, 255, 0.8)'
         )
     )
     
@@ -112,15 +111,13 @@ def create_char_change_impact_chart(data: List[Dict]) -> go.Figure:
     
     fig.update_layout(
         title=f'Impact of Character Changes on Model Accuracy (n={total_samples} samples)',
-        height=600,
-        margin=dict(t=100, b=100),
+        showlegend=True,
         legend=dict(
-            orientation="h",
-            yanchor="bottom",
-            y=-0.3,
-            xanchor="center",
-            x=0.5,
-            bgcolor='rgba(255, 255, 255, 0.9)'
+            yanchor="top",
+            y=0.99,
+            xanchor="left",
+            x=0.01,
+            bgcolor='rgba(255, 255, 255, 0.8)'
         )
     )
     
@@ -167,15 +164,13 @@ def create_outcome_distribution_chart(data: List[Dict]) -> go.Figure:
     total_samples = len(data)
     fig.update_layout(
         title=f'Distribution of Outcomes (n={total_samples} samples)',
-        height=600,
-        margin=dict(t=100, b=100),
+        showlegend=True,
         legend=dict(
-            orientation="h",
-            yanchor="bottom",
-            y=-0.3,
-            xanchor="center",
-            x=0.5,
-            bgcolor='rgba(255, 255, 255, 0.9)'
+            yanchor="top",
+            y=0.99,
+            xanchor="left",
+            x=0.01,
+            bgcolor='rgba(255, 255, 255, 0.8)'
         )
     )
     return fig
@@ -226,15 +221,13 @@ def create_severity_impact_chart(data: List[Dict]) -> go.Figure:
         title=f'Model Accuracy by Severity Level (n={total_samples} samples)',
         xaxis_title='Severity Level',
         yaxis_title='Accuracy (%)',
-        height=600,
-        margin=dict(t=100, b=100),
+        showlegend=True,
         legend=dict(
-            orientation="h",
-            yanchor="bottom",
-            y=-0.3,
-            xanchor="center",
-            x=0.5,
-            bgcolor='rgba(255, 255, 255, 0.9)'
+            yanchor="top",
+            y=0.99,
+            xanchor="left",
+            x=0.01,
+            bgcolor='rgba(255, 255, 255, 0.8)'
         )
     )
     
