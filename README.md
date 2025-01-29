@@ -1,15 +1,76 @@
 # Prompt Research Lab
 
-## Overview
-
-Prompt Research Lab is a project designed to evaluate and compare the performance of different language models (LLMs) in handling various prompts. The project leverages models from OpenAI and Llama  Via Groq to provide insights into how different models respond to the same input, helping researchers and developers optimize prompt engineering strategies.
+A framework for comparing LLM responses across different models with misspelling stability testing.
 
 ## Features
 
-- **Model Comparison**: Compare responses from different LLMs to analyze their interpretation and handling of prompts.
-- **Response Analysis**: Analyze response characteristics including length, word count, and content quality.
-- **Automated Evaluation**: Utilize CrewAI for structured and automated model comparison workflows.
-- **Multi-Model Support**: Currently supports OpenAI (GPT-3.5-turbo) and Groq (llama-3.3-70b-versatile) models.
+- Compare responses from multiple LLMs:
+  - OpenAI GPT-4
+  - Groq Llama (llama-3.3-70b-versatile)
+  - Groq Mixtral (mixtral-8x7b-32768)
+  - Claude 3.5 Sonnet
+- Test model robustness against misspellings
+- Generate detailed comparison reports
+- Visualize performance metrics
+
+## Setup
+
+1. Clone the repository
+2. Install dependencies:
+   ```bash
+   pip install -r requirements.txt
+   ```
+3. Copy `.env.example` to `.env` and add your API keys:
+   - OPENAI_API_KEY
+   - GROQ_LLAMA_API_KEY
+   - GROQ_MIXTRAL_API_KEY
+   - ANTHROPIC_API_KEY
+
+## Usage
+
+1. Single Comparison Test (tests basic setup):
+   ```bash
+   python src/run_comparison.py
+   ```
+   This will:
+   - Test all API connections
+   - Run a single comparison across all models
+   - Display raw results in the console
+
+2. Batch Comparison (main testing):
+   ```bash
+   python src/run_batch_comparison.py
+   ```
+   This will:
+   - Process multiple questions from eval_data.json
+   - Test both original and misspelled variants
+   - Generate model_comparison_results.json in project root
+
+3. Visualize Results:
+   ```bash
+   python src/visualization/test_viz.py
+   ```
+   This will:
+   - Load results from model_comparison_results.json
+   - Start a local Dash server (usually at http://127.0.0.1:8050)
+   - Open your browser to show interactive dashboard with:
+     - Performance comparisons
+     - Robustness analysis
+     - Executive summary
+     - Detailed metrics
+
+Note: 
+- Run the scripts in this order for a complete testing cycle
+- Ensure eval_data.json exists before running batch comparison
+- The visualization server can be stopped with Ctrl+C
+
+## Configuration
+
+Settings can be configured in `src/config.py`, including:
+- Model selection
+- Batch size
+- Misspelling severity
+- Output file locations
 
 ## Project Structure
 
@@ -39,57 +100,6 @@ prompt-research-lab/
 
 - **Model Comparison Tool**: Compares responses from different LLMs using standardized metrics.
 - **Response Analysis**: Provides detailed analysis of response characteristics and quality metrics.
-
-## Setup
-
-1. **Clone the Repository**:
-   ```bash
-   git clone https://github.com/yourusername/prompt-research-lab.git
-   cd prompt-research-lab
-   ```
-
-2. **Create a Virtual Environment**:
-   ```bash
-    # Create new environment with Python 3.10
-   conda create -n prompt-lab python=3.10
-   
-   # Activate the environment
-   conda activate prompt-lab
-   ```
-
-3. **Install Dependencies**:
-   ```bash
-   pip install -r requirements.txt
-   ```
-
-4. **Set Up Environment Variables**:
-   Create a `.env` file in the project root with your API keys:
-   ```plaintext
-   OPENAI_API_KEY=your-openai-api-key
-   GROQ_API_KEY=your-groq-api-key
-   ```
-
-## Usage
-
-Run the model comparison:
-```bash
-python src/run_comparison.py
-```
-
-This will:
-1. Load your environment variables
-2. Initialize the model comparison agent
-3. Execute the comparison task
-4. Display detailed results comparing responses from both models
-
-## Example Output
-
-The comparison results include:
-- Full responses from both models
-- Length comparison metrics
-- Word and character count analysis
-- Quality assessment of responses
-
 
 ## Dependencies
 
@@ -166,7 +176,6 @@ If you have questions or need help with your contribution:
 - Reach out to the maintainers
 
 Thank you for contributing to Prompt Research Lab!
-
 ## Configuration
 
 The application uses Pydantic Settings for configuration management. Configuration can be set through environment variables or a `.env` file.
@@ -185,13 +194,16 @@ The application uses Pydantic Settings for configuration management. Configurati
 ### Environment Variables
 Create a `.env` file in the root directory:
 ```env
-OPENAI_API_KEY=your-openai-api-key
-GROQ_API_KEY=your-groq-api-key
+OPENAI_API_KEY=your-openai-key-here
+GROQ_LLAMA_API_KEY=your-groq-llama-key-here
+GROQ_MIXTRAL_API_KEY=your-groq-mixtral-key-here
+ANTHROPIC_API_KEY=your-anthropic-key-here
 
 # Optional settings
-DEFAULT_MODEL=gpt-3.5-turbo
+DEFAULT_MODEL=gpt-4o
 MAX_TOKENS=1000
 BATCH_SIZE=10
 ```
 
 The application is flexible with additional environment variables and is case-insensitive.
+
