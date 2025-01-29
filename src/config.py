@@ -6,13 +6,15 @@ class Settings(BaseSettings):
     # Required Settings
     OPENAI_API_KEY: str
     GROQ_API_KEY: str
+    ANTHROPIC_API_KEY: str   
     
     # Optional Settings with defaults
     OPENAI_MODEL: str = "gpt-4o"
     GROQ_MODEL: str = "llama-3.3-70b-versatile"
+    CLAUDE_MODEL: str = "claude-3-5-sonnet-20241022"  
     MAX_TOKENS: int = 1000
     BATCH_SIZE: int = 2
-    TOTAL_ITEMS: Optional[int] = None  # None means process all items
+    TOTAL_ITEMS: Optional[int] = 2  # None means process all items
     OUTPUT_FILE: str = "model_comparison_results.json"
     
     # New Robustness Testing Settings

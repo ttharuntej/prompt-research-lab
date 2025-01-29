@@ -13,16 +13,18 @@ def main():
         raise ValueError("OPENAI_API_KEY not found in environment variables")
     if not os.getenv('GROQ_API_KEY'):
         raise ValueError("GROQ_API_KEY not found in environment variables")
+    if not os.getenv('ANTHROPIC_API_KEY'):  # Add Claude check
+        raise ValueError("ANTHROPIC_API_KEY not found in environment variables")
     
-  # Create task with input/output format
+    # Create task with input/output format
     task = Task(
         description=(
-            "Compare how OpenAI and Groq handle this prompt: {prompt}."
+            "Compare how OpenAI, Groq, and Claude handle this prompt: {prompt}."
             " Provide a comparison analysis including response content and quality metrics."
         ),
         agent=comparison_agent,
         expected_output=(
-            "A comparison analysis between OpenAI and Groq responses, "
+            "A comparison analysis between OpenAI, Groq, and Claude responses, "
             "including response content and quality metrics."
         )
     )

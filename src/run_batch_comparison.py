@@ -58,8 +58,9 @@ def extract_answer(text):
     
     openai = find_last_answer('openai')
     groq = find_last_answer('groq')
+    claude = find_last_answer('claude')
     
-    return openai, groq
+    return openai, groq, claude
 
 # def extract_answer(text):
     """Extract OpenAI and Groq answers from the response text.
@@ -88,10 +89,10 @@ def extract_answer(text):
 def create_comparison_task(question: str) -> Task:
     """Create a task with proper prompt engineering"""
     enhanced_prompt = f"""
-    Compare how OpenAI and Groq respond to this multiple choice question.
+    Compare how OpenAI, Groq, and Claude respond to this multiple choice question.
     
     IMPORTANT INSTRUCTIONS:
-    1. Use the compare_models tool to get responses from both models
+    1. Use the compare_models tool to get responses from all three models
     2. Each model must analyze the question and provide their answer
     3. Each model's response MUST include 'Answer: X' where X is A, B, C, or D
     4. Models can provide explanations, but 'Answer: X' must be present 
@@ -107,61 +108,72 @@ def create_comparison_task(question: str) -> Task:
         expected_output="Comparison of model responses, each including 'Answer: X' format"
     )
 
-def create_failure_record(question: str, expected_answer: str, openai_answer=None, groq_answer=None, error=None, is_misspelled=False):
-    """Create a standardized failure record for both error cases and answer mismatches"""
+def create_failure_record(question: str, expected_answer: str, 
+                         openai_answer=None, groq_answer=None, claude_answer=None,  # Add Claude
+                         error=None, is_misspelled=False):
+    """Create a standardized failure record"""
     record = {
         'timestamp': datetime.now().isoformat(),
         'question': question,
         'expected_answer': expected_answer,
-        'is_misspelled': is_misspelled,  # Track if this was a misspelled variant
+        'is_misspelled': is_misspelled,
     }
     
     if error:
         record['error'] = str(error)
     else:
         models_failed = []
-        if openai_answer is None:
-            models_failed.append('openai')
-        if groq_answer is None:
-            models_failed.append('groq')
+        if openai_answer is None: models_failed.append('openai')
+        if groq_answer is None: models_failed.append('groq')
+        if claude_answer is None: models_failed.append('claude')  
             
         record['model_responses'] = {
-            'openai': {
-                'answer': openai_answer,
-                'failed': 'openai' in models_failed
-            },
-            'groq': {
-                'answer': groq_answer,
-                'failed': 'groq' in models_failed
-            }
+            'openai': {'answer': openai_answer, 'failed': 'openai' in models_failed},
+            'groq': {'answer': groq_answer, 'failed': 'groq' in models_failed},
+            'claude': {'answer': claude_answer, 'failed': 'claude' in models_failed}  
         }
         record['models_failed'] = models_failed
-        
+    
     return record
 
-def check_model_answers(openai_answer: str, groq_answer: str, expected_answer: str) -> tuple[bool, str]:
-    """Check if model answers match expected answer and generate appropriate message.
-    Returns (is_correct, message)"""
-    if None in (openai_answer, groq_answer):
+def check_model_answers(openai_answer: str, groq_answer: str, claude_answer: str, 
+                       expected_answer: str) -> tuple[bool, str]:
+    """Check if model answers match expected answer"""
+    if None in (openai_answer, groq_answer, claude_answer):
         return False, "❌ One or more models failed to provide an answer"
         
-    if openai_answer != expected_answer or groq_answer != expected_answer:
-        return False, f"\n❌ Answers differ from expected:\nExpected: {expected_answer}\nOpenAI: {openai_answer}\nGroq: {groq_answer}"
+    answers = {
+        'OpenAI': openai_answer,
+        'Groq': groq_answer,
+        'Claude': claude_answer
+    }
+    incorrect = [name for name, ans in answers.items() if ans != expected_answer]
+    
+    if incorrect:
+        msg = f"\n❌ Incorrect answers from: {', '.join(incorrect)}\n"
+        msg += f"Expected: {expected_answer}\n"
+        msg += "\n".join(f"{name}: {ans}" for name, ans in answers.items())
+        return False, msg
         
-    return True, f"✅ Both models correct with answer {expected_answer}"
+    return True, f"✅ All models correct with answer {expected_answer}"
 
-def determine_outcome(openai_correct: bool, groq_correct: bool, 
-                     openai_answered: bool, groq_answered: bool) -> ComparisonOutcome:
+def determine_outcome(model_responses: dict, expected_answer: str) -> ComparisonOutcome:
     """Determine the comparison outcome based on model performances"""
-    if not openai_answered and not groq_answered:
-        return ComparisonOutcome.NEITHER_ANSWERED
-    if openai_correct and groq_correct:
-        return ComparisonOutcome.BOTH_CORRECT
-    if not openai_correct and not groq_correct:
-        return ComparisonOutcome.BOTH_INCORRECT
-    if openai_correct:
-        return ComparisonOutcome.OPENAI_ONLY_CORRECT
-    return ComparisonOutcome.GROQ_ONLY_CORRECT
+    # Count correct and answered
+    total_models = len(model_responses)
+    correct_count = sum(1 for resp in model_responses.values() 
+                       if resp.answer == expected_answer)
+    answered_count = sum(1 for resp in model_responses.values() 
+                        if resp.answer is not None)
+    
+    if answered_count == 0:
+        return ComparisonOutcome.NONE_ANSWERED
+    elif correct_count == total_models:
+        return ComparisonOutcome.ALL_CORRECT
+    elif correct_count == 0:
+        return ComparisonOutcome.ALL_INCORRECT
+    else:
+        return ComparisonOutcome.MIXED_RESULTS
 
 def create_comparison_record(row_idx: int, original_q: str, misspelled_q: str, 
                            expected_answer: str, 
@@ -174,34 +186,39 @@ def create_comparison_record(row_idx: int, original_q: str, misspelled_q: str,
             "openai": ModelResponse(
                 answer=results.get('openai_answer'),
                 failed=results.get('openai_answer') is None,
-                model_name=settings.OPENAI_MODEL
+                model_name=settings.OPENAI_MODEL,
+                is_correct=results.get('openai_answer') == expected_answer
             ),
             "groq": ModelResponse(
                 answer=results.get('groq_answer'),
                 failed=results.get('groq_answer') is None,
-                model_name=settings.GROQ_MODEL
+                model_name=settings.GROQ_MODEL,
+                is_correct=results.get('groq_answer') == expected_answer
+            ),
+            "claude": ModelResponse(  # Add Claude
+                answer=results.get('claude_answer'),
+                failed=results.get('claude_answer') is None,
+                model_name=settings.CLAUDE_MODEL,
+                is_correct=results.get('claude_answer') == expected_answer
             )
         }
         
-        # Determine correctness
-        openai_correct = results.get('openai_answer') == expected_answer
-        groq_correct = results.get('groq_answer') == expected_answer
-        openai_answered = results.get('openai_answer') is not None
-        groq_answered = results.get('groq_answer') is not None
-        
         # Create comparison result
         comparison_result = ComparisonResult(
-            models_agree=results.get('openai_answer') == results.get('groq_answer'),
-            outcome=determine_outcome(openai_correct, groq_correct, 
-                                   openai_answered, groq_answered),
+            models_agree=len(set(r.answer for r in model_responses.values() if r.answer is not None)) == 1,
+            outcome=determine_outcome(model_responses, expected_answer),
             details={
                 "openai": ModelDetail(
-                    is_correct=openai_correct,
-                    provided_answer=openai_answered
+                    is_correct=model_responses["openai"].is_correct,
+                    provided_answer=model_responses["openai"].answer is not None
                 ),
                 "groq": ModelDetail(
-                    is_correct=groq_correct,
-                    provided_answer=groq_answered
+                    is_correct=model_responses["groq"].is_correct,
+                    provided_answer=model_responses["groq"].answer is not None
+                ),
+                "claude": ModelDetail(
+                    is_correct=model_responses["claude"].is_correct,
+                    provided_answer=model_responses["claude"].answer is not None
                 )
             }
         )
@@ -239,16 +256,18 @@ def run_model_comparison(question: str) -> dict:
         result = crew.kickoff()
         raw_output = result.tasks_output[0].raw
         
-        openai_answer, groq_answer = extract_answer(raw_output)
+        openai_answer, groq_answer, claude_answer = extract_answer(raw_output)
         return {
             'openai_answer': openai_answer,
-            'groq_answer': groq_answer
+            'groq_answer': groq_answer,
+            'claude_answer': claude_answer
         }
     except Exception as e:
         print(f"❌ Error in comparison: {str(e)}")
         return {
             'openai_answer': None,
-            'groq_answer': None
+            'groq_answer': None,
+            'claude_answer': None
         }
 
 def run_comparison():
