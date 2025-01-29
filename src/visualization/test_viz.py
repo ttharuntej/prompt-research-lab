@@ -10,96 +10,36 @@ from src.visualization.charts import (
     create_model_performance_chart, 
     create_char_change_impact_chart, 
     create_outcome_distribution_chart, 
-    create_severity_impact_chart
+    create_severity_impact_chart,
+    create_performance_chart,
+    create_robustness_chart
 )
 from src.visualization.summary import generate_executive_summary
 from typing import List, Dict
 
 def create_dashboard(data: List[Dict]) -> html.Div:
-    """Create dashboard with all visualizations"""
+    """Create the complete dashboard"""
+    
     return html.Div([
-        # Title and Print Button
-        html.H1('Model Comparison Dashboard', 
-                style={'textAlign': 'center', 'marginBottom': '10px'}),
-        html.P(f'Last updated: {datetime.now().strftime("%Y-%m-%d %H:%M:%S")}',
-               style={'textAlign': 'center', 'marginBottom': '30px'}),
-        html.Button(
-            'Print Dashboard',
-            id='print-button',
-            style={
-                'position': 'fixed',
-                'top': '20px',
-                'right': '20px',
-                'padding': '10px 20px',
-                'backgroundColor': '#4CAF50',
-                'color': 'white',
-                'border': 'none',
-                'borderRadius': '4px',
-                'cursor': 'pointer',
-                'fontSize': '16px'
-            }
-        ),
-        
-        # Print Script
-        html.Script('''
-            document.getElementById('print-button').onclick = function() {
-                window.print();
-            }
-        '''),
+        html.H1('Model Comparison Analysis'),
         
         # Executive Summary
         html.Div([
-            html.Pre(
-                generate_executive_summary(data),
-                style={
-                    'whiteSpace': 'pre-wrap',
-                    'fontFamily': 'monospace',
-                    'padding': '20px',
-                    'backgroundColor': '#f5f5f5',
-                    'borderRadius': '5px',
-                    'overflowX': 'auto',
-                    'margin': '20px'
-                }
-            )
-        ], className='summary-container'),
+            html.H2('Executive Summary'),
+            dcc.Markdown(generate_executive_summary(data))
+        ]),
         
-        # Charts in Vertical Layout
+        # Performance Chart
         html.Div([
-            html.Div([
-                dcc.Graph(
-                    figure=create_model_performance_chart(data),
-                    config={'displayModeBar': False}
-                )
-            ], className='chart-container'),
-            
-            html.Div([
-                dcc.Graph(
-                    figure=create_outcome_distribution_chart(data),
-                    config={'displayModeBar': False}
-                )
-            ], className='chart-container'),
-            
-            html.Div([
-                dcc.Graph(
-                    figure=create_char_change_impact_chart(data),
-                    config={'displayModeBar': False}
-                )
-            ], className='chart-container'),
-            
-            html.Div([
-                dcc.Graph(
-                    figure=create_severity_impact_chart(data),
-                    config={'displayModeBar': False}
-                )
-            ], className='chart-container')
-        ], style={
-            'display': 'flex',
-            'flexDirection': 'column',
-            'gap': '30px',
-            'padding': '20px',
-            'maxWidth': '1200px',
-            'margin': '0 auto'
-        })
+            html.H2('Performance Comparison'),
+            dcc.Graph(figure=create_performance_chart(data))
+        ]),
+        
+        # Robustness Chart
+        html.Div([
+            html.H2('Robustness Analysis'),
+            dcc.Graph(figure=create_robustness_chart(data))
+        ])
     ])
 
 if __name__ == "__main__":

@@ -10,7 +10,7 @@ from schemas.comparison_schema import (
     MisspellingInfo, TestResults, ModelResponse, ModelDetail,
     ComparisonResult
 )
-import ijson  # Add to requirements.txt
+import ijson
 
 def load_eval_data(batch_size=settings.BATCH_SIZE, total_limit=None):
     """Stream evaluation data from JSON file in batches
@@ -43,7 +43,29 @@ def load_eval_data(batch_size=settings.BATCH_SIZE, total_limit=None):
     if current_batch:
         yield current_batch
 
+
 def extract_answer(text):
+    """Extract answers from all model responses"""
+    import re
+    # Clean the text
+    text = text.lower()
+    text = re.sub(r'\*|\-|•|\n+', ' ', text)
+    
+    # Find the last answer for each model
+    def find_last_answer(model):
+        # Make pattern more flexible by allowing spaces around the model name
+        pattern = f"{model.replace('-', '[- ]')}.*?answer:?\\s*([a-d])"
+        matches = re.findall(pattern, text)
+        return matches[-1].upper() if matches else None
+    
+    openai = find_last_answer('openai')
+    groq_llama = find_last_answer('groq llama')  # Changed from groq-llama
+    groq_mixtral = find_last_answer('groq mixtral')  # Changed from groq-mixtral
+    claude = find_last_answer('claude')
+    
+    return openai, groq_llama, groq_mixtral, claude
+# def extract_answer(text):
+    """Extract answers from all model responses"""
     import re
     
     # Clean the text
@@ -57,42 +79,19 @@ def extract_answer(text):
         return matches[-1].upper() if matches else None
     
     openai = find_last_answer('openai')
-    groq = find_last_answer('groq')
+    groq_llama = find_last_answer('groq-llama')
+    groq_mixtral = find_last_answer('groq-mixtral')
     claude = find_last_answer('claude')
     
-    return openai, groq, claude
-
-# def extract_answer(text):
-    """Extract OpenAI and Groq answers from the response text.
-    Returns a tuple of (openai_answer, groq_answer)"""
-    # Split into OpenAI and Groq parts
-    parts = text.split('Groq')
-    if len(parts) != 2:
-        parts = text.split('groq')  # Try lowercase if first split fails
-        if len(parts) != 2:
-            raise ValueError("Could not separate OpenAI and Groq responses")
-    
-    def get_letter(text):
-        if 'Answer:' not in text:
-            return None
-        after_answer = text.split('Answer:')[1].strip()
-        return after_answer[0].upper()
-    
-    openai_answer = get_letter(parts[0])
-    groq_answer = get_letter(parts[1])
-    
-    if not openai_answer or not groq_answer:
-        raise ValueError("Could not extract answers in expected format")
-    
-    return openai_answer, groq_answer
+    return openai, groq_llama, groq_mixtral, claude
 
 def create_comparison_task(question: str) -> Task:
     """Create a task with proper prompt engineering"""
     enhanced_prompt = f"""
-    Compare how OpenAI, Groq, and Claude respond to this multiple choice question.
+    Compare how OpenAI, Groq-Llama, Groq-Mixtral, and Claude respond to this multiple choice question.
     
     IMPORTANT INSTRUCTIONS:
-    1. Use the compare_models tool to get responses from all three models
+    1. Use the compare_models tool to get responses from all four models
     2. Each model must analyze the question and provide their answer
     3. Each model's response MUST include 'Answer: X' where X is A, B, C, or D
     4. Models can provide explanations, but 'Answer: X' must be present 
@@ -109,7 +108,8 @@ def create_comparison_task(question: str) -> Task:
     )
 
 def create_failure_record(question: str, expected_answer: str, 
-                         openai_answer=None, groq_answer=None, claude_answer=None,  # Add Claude
+                         openai_answer=None, groq_llama_answer=None, 
+                         groq_mixtral_answer=None, claude_answer=None,
                          error=None, is_misspelled=False):
     """Create a standardized failure record"""
     record = {
@@ -124,27 +124,31 @@ def create_failure_record(question: str, expected_answer: str,
     else:
         models_failed = []
         if openai_answer is None: models_failed.append('openai')
-        if groq_answer is None: models_failed.append('groq')
-        if claude_answer is None: models_failed.append('claude')  
+        if groq_llama_answer is None: models_failed.append('groq_llama')
+        if groq_mixtral_answer is None: models_failed.append('groq_mixtral')
+        if claude_answer is None: models_failed.append('claude')
             
         record['model_responses'] = {
             'openai': {'answer': openai_answer, 'failed': 'openai' in models_failed},
-            'groq': {'answer': groq_answer, 'failed': 'groq' in models_failed},
-            'claude': {'answer': claude_answer, 'failed': 'claude' in models_failed}  
+            'groq_llama': {'answer': groq_llama_answer, 'failed': 'groq_llama' in models_failed},
+            'groq_mixtral': {'answer': groq_mixtral_answer, 'failed': 'groq_mixtral' in models_failed},
+            'claude': {'answer': claude_answer, 'failed': 'claude' in models_failed}
         }
         record['models_failed'] = models_failed
     
     return record
 
-def check_model_answers(openai_answer: str, groq_answer: str, claude_answer: str, 
+def check_model_answers(openai_answer: str, groq_llama_answer: str, 
+                       groq_mixtral_answer: str, claude_answer: str, 
                        expected_answer: str) -> tuple[bool, str]:
     """Check if model answers match expected answer"""
-    if None in (openai_answer, groq_answer, claude_answer):
+    if None in (openai_answer, groq_llama_answer, groq_mixtral_answer, claude_answer):
         return False, "❌ One or more models failed to provide an answer"
         
     answers = {
         'OpenAI': openai_answer,
-        'Groq': groq_answer,
+        'Groq-Llama': groq_llama_answer,
+        'Groq-Mixtral': groq_mixtral_answer,
         'Claude': claude_answer
     }
     incorrect = [name for name, ans in answers.items() if ans != expected_answer]
@@ -160,7 +164,7 @@ def check_model_answers(openai_answer: str, groq_answer: str, claude_answer: str
 def determine_outcome(model_responses: dict, expected_answer: str) -> ComparisonOutcome:
     """Determine the comparison outcome based on model performances"""
     # Count correct and answered
-    total_models = len(model_responses)
+    total_models = len(model_responses)  # Now 4 models
     correct_count = sum(1 for resp in model_responses.values() 
                        if resp.answer == expected_answer)
     answered_count = sum(1 for resp in model_responses.values() 
@@ -189,13 +193,19 @@ def create_comparison_record(row_idx: int, original_q: str, misspelled_q: str,
                 model_name=settings.OPENAI_MODEL,
                 is_correct=results.get('openai_answer') == expected_answer
             ),
-            "groq": ModelResponse(
-                answer=results.get('groq_answer'),
-                failed=results.get('groq_answer') is None,
-                model_name=settings.GROQ_MODEL,
-                is_correct=results.get('groq_answer') == expected_answer
+            "groq_llama": ModelResponse(
+                answer=results.get('groq_llama_answer'),
+                failed=results.get('groq_llama_answer') is None,
+                model_name=settings.GROQ_LLAMA_MODEL,
+                is_correct=results.get('groq_llama_answer') == expected_answer
             ),
-            "claude": ModelResponse(  # Add Claude
+            "groq_mixtral": ModelResponse(
+                answer=results.get('groq_mixtral_answer'),
+                failed=results.get('groq_mixtral_answer') is None,
+                model_name=settings.GROQ_MIXTRAL_MODEL,
+                is_correct=results.get('groq_mixtral_answer') == expected_answer
+            ),
+            "claude": ModelResponse(
                 answer=results.get('claude_answer'),
                 failed=results.get('claude_answer') is None,
                 model_name=settings.CLAUDE_MODEL,
@@ -212,9 +222,13 @@ def create_comparison_record(row_idx: int, original_q: str, misspelled_q: str,
                     is_correct=model_responses["openai"].is_correct,
                     provided_answer=model_responses["openai"].answer is not None
                 ),
-                "groq": ModelDetail(
-                    is_correct=model_responses["groq"].is_correct,
-                    provided_answer=model_responses["groq"].answer is not None
+                "groq_llama": ModelDetail(
+                    is_correct=model_responses["groq_llama"].is_correct,
+                    provided_answer=model_responses["groq_llama"].answer is not None
+                ),
+                "groq_mixtral": ModelDetail(
+                    is_correct=model_responses["groq_mixtral"].is_correct,
+                    provided_answer=model_responses["groq_mixtral"].answer is not None
                 ),
                 "claude": ModelDetail(
                     is_correct=model_responses["claude"].is_correct,
@@ -256,25 +270,35 @@ def run_model_comparison(question: str) -> dict:
         result = crew.kickoff()
         raw_output = result.tasks_output[0].raw
         
-        openai_answer, groq_answer, claude_answer = extract_answer(raw_output)
+        openai_answer, groq_llama, groq_mixtral, claude_answer = extract_answer(raw_output)
+        print("DEBUG: raw_output", raw_output);
+        print("DEBUG: openai_answer, groq_llama, groq_mixtral, claude_answer", openai_answer, groq_llama, groq_mixtral, claude_answer);
         return {
             'openai_answer': openai_answer,
-            'groq_answer': groq_answer,
+            'groq_llama_answer': groq_llama,
+            'groq_mixtral_answer': groq_mixtral,
             'claude_answer': claude_answer
         }
     except Exception as e:
         print(f"❌ Error in comparison: {str(e)}")
         return {
             'openai_answer': None,
-            'groq_answer': None,
+            'groq_llama_answer': None,
+            'groq_mixtral_answer': None,
             'claude_answer': None
         }
 
 def run_comparison():
     # Load environment variables and verify API keys
     load_dotenv()
-    if not settings.OPENAI_API_KEY or not settings.GROQ_API_KEY:
-        raise ValueError("Missing API keys in environment variables")
+    if not settings.OPENAI_API_KEY:
+        raise ValueError("OPENAI_API_KEY not found in environment variables")
+    if not settings.GROQ_LLAMA_API_KEY:  # Changed from GROQ_API_KEY
+        raise ValueError("GROQ_LLAMA_API_KEY not found in environment variables")
+    if not settings.GROQ_MIXTRAL_API_KEY:  # New check
+        raise ValueError("GROQ_MIXTRAL_API_KEY not found in environment variables")
+    if not settings.ANTHROPIC_API_KEY:
+        raise ValueError("ANTHROPIC_API_KEY not found in environment variables")
 
     # Initialize misspelling generator
     misspelling_gen = MisspellingGenerator()

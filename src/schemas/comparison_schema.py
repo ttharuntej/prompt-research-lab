@@ -52,7 +52,8 @@ class ComparisonRecord(BaseModel):
     model_details: Dict[str, str] = Field(
         default_factory=lambda: {
             "openai": settings.OPENAI_MODEL,
-            "groq": settings.GROQ_MODEL,
+            "groq_llama": settings.GROQ_LLAMA_MODEL,
+            "groq_mixtral": settings.GROQ_MIXTRAL_MODEL,
             "claude": settings.CLAUDE_MODEL   
         }
     ) 

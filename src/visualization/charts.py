@@ -257,3 +257,66 @@ def create_severity_impact_chart(data: List[Dict]) -> go.Figure:
     )
     
     return fig
+
+def create_performance_chart(data: List[Dict]) -> go.Figure:
+    """Create performance comparison chart"""
+    # Update models list
+    models = ['OpenAI', 'Groq-Llama', 'Groq-Mixtral', 'Claude']
+    
+    # Calculate performance stats
+    total = len(data)
+    original_perf = []
+    misspelled_perf = []
+    
+    for model_key in ['openai', 'groq_llama', 'groq_mixtral', 'claude']:
+        orig_correct = sum(1 for d in data 
+                         if d['results']['original']['model_responses'][model_key]['is_correct'])
+        misp_correct = sum(1 for d in data 
+                          if d['results']['misspelled']['model_responses'][model_key]['is_correct'])
+        
+        original_perf.append(orig_correct/total*100)
+        misspelled_perf.append(misp_correct/total*100)
+    
+    # Create figure
+    fig = go.Figure(data=[
+        go.Bar(name='Original Text', x=models, y=original_perf),
+        go.Bar(name='Misspelled Text', x=models, y=misspelled_perf)
+    ])
+    
+    fig.update_layout(
+        title='Model Performance Comparison',
+        xaxis_title='Models',
+        yaxis_title='Accuracy (%)',
+        barmode='group'
+    )
+    
+    return fig
+
+def create_robustness_chart(data: List[Dict]) -> go.Figure:
+    """Create robustness comparison chart"""
+    total = len(data)
+    models = ['OpenAI', 'Groq-Llama', 'Groq-Mixtral', 'Claude']
+    performance_drop = []
+    
+    for model_key in ['openai', 'groq_llama', 'groq_mixtral', 'claude']:
+        orig_correct = sum(1 for d in data 
+                         if d['results']['original']['model_responses'][model_key]['is_correct'])
+        misp_correct = sum(1 for d in data 
+                          if d['results']['misspelled']['model_responses'][model_key]['is_correct'])
+        
+        orig_perf = orig_correct/total*100
+        misp_perf = misp_correct/total*100
+        performance_drop.append(abs(orig_perf - misp_perf))
+    
+    fig = go.Figure(data=[
+        go.Bar(x=models, y=performance_drop)
+    ])
+    
+    fig.update_layout(
+        title='Model Robustness (Performance Drop)',
+        xaxis_title='Models',
+        yaxis_title='Performance Drop (%)',
+        yaxis=dict(autorange="reversed")  # Reverse y-axis as lower drop is better
+    )
+    
+    return fig
