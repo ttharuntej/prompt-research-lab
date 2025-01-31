@@ -1,7 +1,7 @@
 from typing import List, Dict
 import plotly.graph_objects as go
 import plotly.express as px
-from ..schemas.comparison_schema import ComparisonOutcome
+from src.schemas.comparison_schema import ComparisonOutcome
 from plotly.subplots import make_subplots
 
 def create_model_performance_chart(data: List[Dict]) -> go.Figure:
@@ -13,8 +13,8 @@ def create_model_performance_chart(data: List[Dict]) -> go.Figure:
     """
     # Process data
     stats = {
-        'original': {'openai': 0, 'groq': 0, 'total': 0},
-        'misspelled': {'openai': 0, 'groq': 0, 'total': 0}
+        'original': {'openai': 0, 'groq': 0, 'claude': 0, 'total': 0},
+        'misspelled': {'openai': 0, 'groq': 0, 'claude': 0, 'total': 0}
     }
     
     for record in data:
@@ -25,6 +25,8 @@ def create_model_performance_chart(data: List[Dict]) -> go.Figure:
             stats['original']['openai'] += 1
         if orig['model_responses']['groq']['answer'] == record['question_pair']['expected_answer']:
             stats['original']['groq'] += 1
+        if orig['model_responses']['claude']['answer'] == record['question_pair']['expected_answer']:
+            stats['original']['claude'] += 1
             
         # Misspelled results
         misp = record['results']['misspelled']
@@ -33,8 +35,10 @@ def create_model_performance_chart(data: List[Dict]) -> go.Figure:
             stats['misspelled']['openai'] += 1
         if misp['model_responses']['groq']['answer'] == record['question_pair']['expected_answer']:
             stats['misspelled']['groq'] += 1
+        if misp['model_responses']['claude']['answer'] == record['question_pair']['expected_answer']:
+            stats['misspelled']['claude'] += 1
     
-    # Create figure
+    # Create figure with three bars per group
     fig = go.Figure(data=[
         go.Bar(name='OpenAI Original', 
                x=['Accuracy'], 
@@ -42,27 +46,32 @@ def create_model_performance_chart(data: List[Dict]) -> go.Figure:
         go.Bar(name='Groq Original',
                x=['Accuracy'],
                y=[stats['original']['groq']/stats['original']['total'] * 100]),
+        go.Bar(name='Claude Original',
+               x=['Accuracy'],
+               y=[stats['original']['claude']/stats['original']['total'] * 100]),
         go.Bar(name='OpenAI Misspelled',
                x=['Accuracy'],
                y=[stats['misspelled']['openai']/stats['misspelled']['total'] * 100]),
         go.Bar(name='Groq Misspelled',
                x=['Accuracy'],
-               y=[stats['misspelled']['groq']/stats['misspelled']['total'] * 100])
+               y=[stats['misspelled']['groq']/stats['misspelled']['total'] * 100]),
+        go.Bar(name='Claude Misspelled',
+               x=['Accuracy'],
+               y=[stats['misspelled']['claude']/stats['misspelled']['total'] * 100])
     ])
     
     fig.update_layout(
         title=f'Model Performance Comparison (n={stats["original"]["total"]} samples)',
         yaxis_title='Accuracy (%)',
         barmode='group',
-        height=600,
-        margin=dict(t=100, b=100),
+        height=500,
+        showlegend=True,
         legend=dict(
-            orientation="h",
-            yanchor="bottom",
-            y=-0.3,
-            xanchor="center",
-            x=0.5,
-            bgcolor='rgba(255, 255, 255, 0.9)'
+            yanchor="top",
+            y=0.99,
+            xanchor="left",
+            x=0.01,
+            bgcolor='rgba(255, 255, 255, 0.8)'
         )
     )
     
@@ -96,6 +105,14 @@ def create_char_change_impact_chart(data: List[Dict]) -> go.Figure:
             'correct': int(groq_correct),
             'model': 'Groq'
         })
+
+        # Claude accuracy
+        claude_correct = record['results']['misspelled']['model_responses']['claude']['answer'] == expected
+        points.append({
+            'char_changes': char_changes,
+            'correct': int(claude_correct),
+            'model': 'Claude'
+        })
     
     # Create figure using plotly express
     total_samples = len(data)
@@ -112,34 +129,33 @@ def create_char_change_impact_chart(data: List[Dict]) -> go.Figure:
     
     fig.update_layout(
         title=f'Impact of Character Changes on Model Accuracy (n={total_samples} samples)',
-        height=600,
-        margin=dict(t=100, b=100),
+        showlegend=True,
         legend=dict(
-            orientation="h",
-            yanchor="bottom",
-            y=-0.3,
-            xanchor="center",
-            x=0.5,
-            bgcolor='rgba(255, 255, 255, 0.9)'
+            yanchor="top",
+            y=0.99,
+            xanchor="left",
+            x=0.01,
+            bgcolor='rgba(255, 255, 255, 0.8)'
         )
     )
     
     return fig 
 
 def create_outcome_distribution_chart(data: List[Dict]) -> go.Figure:
-    """Create pie charts showing distribution of outcomes
-    
-    Shows:
-    - Distribution of BOTH_CORRECT, BOTH_INCORRECT, etc.
-    - Separate for original vs misspelled
-    """
+    """Create pie charts showing distribution of outcomes"""
     outcomes = {
-        'original': {'BOTH_CORRECT': 0, 'BOTH_INCORRECT': 0, 
-                    'OPENAI_ONLY_CORRECT': 0, 'GROQ_ONLY_CORRECT': 0, 
-                    'NEITHER_ANSWERED': 0},
-        'misspelled': {'BOTH_CORRECT': 0, 'BOTH_INCORRECT': 0, 
-                      'OPENAI_ONLY_CORRECT': 0, 'GROQ_ONLY_CORRECT': 0, 
-                      'NEITHER_ANSWERED': 0}
+        'original': {
+            'ALL_CORRECT': 0, 
+            'ALL_INCORRECT': 0, 
+            'MIXED_RESULTS': 0, 
+            'NONE_ANSWERED': 0
+        },
+        'misspelled': {
+            'ALL_CORRECT': 0, 
+            'ALL_INCORRECT': 0, 
+            'MIXED_RESULTS': 0, 
+            'NONE_ANSWERED': 0
+        }
     }
     
     for record in data:
@@ -167,15 +183,13 @@ def create_outcome_distribution_chart(data: List[Dict]) -> go.Figure:
     total_samples = len(data)
     fig.update_layout(
         title=f'Distribution of Outcomes (n={total_samples} samples)',
-        height=600,
-        margin=dict(t=100, b=100),
+        showlegend=True,
         legend=dict(
-            orientation="h",
-            yanchor="bottom",
-            y=-0.3,
-            xanchor="center",
-            x=0.5,
-            bgcolor='rgba(255, 255, 255, 0.9)'
+            yanchor="top",
+            y=0.99,
+            xanchor="left",
+            x=0.01,
+            bgcolor='rgba(255, 255, 255, 0.8)'
         )
     )
     return fig
@@ -194,48 +208,115 @@ def create_severity_impact_chart(data: List[Dict]) -> go.Figure:
         severity = record['misspelling_info']['severity']
         if severity not in severity_stats:
             severity_stats[severity] = {
-                'openai_correct': 0, 'groq_correct': 0, 'total': 0
+                'openai_correct': 0, 
+                'groq_correct': 0,
+                'claude_correct': 0,
+                'total': 0
             }
         
         expected = record['question_pair']['expected_answer']
         stats = severity_stats[severity]
         stats['total'] += 1
         
-        # Check correctness
+        # Check correctness for each model
         if record['results']['misspelled']['model_responses']['openai']['answer'] == expected:
             stats['openai_correct'] += 1
         if record['results']['misspelled']['model_responses']['groq']['answer'] == expected:
             stats['groq_correct'] += 1
+        if record['results']['misspelled']['model_responses']['claude']['answer'] == expected:
+            stats['claude_correct'] += 1
     
     # Create figure
     fig = go.Figure()
     
     severities = list(severity_stats.keys())
-    openai_acc = [stats['openai_correct']/stats['total']*100 
-                  for stats in severity_stats.values()]
-    groq_acc = [stats['groq_correct']/stats['total']*100 
-                for stats in severity_stats.values()]
+    openai_acc = [stats['openai_correct']/stats['total']*100 for stats in severity_stats.values()]
+    groq_acc = [stats['groq_correct']/stats['total']*100 for stats in severity_stats.values()]
+    claude_acc = [stats['claude_correct']/stats['total']*100 for stats in severity_stats.values()]
     
     fig.add_trace(go.Scatter(x=severities, y=openai_acc, 
                             mode='lines+markers', name='OpenAI'))
     fig.add_trace(go.Scatter(x=severities, y=groq_acc, 
                             mode='lines+markers', name='Groq'))
+    fig.add_trace(go.Scatter(x=severities, y=claude_acc, 
+                            mode='lines+markers', name='Claude'))
     
     total_samples = sum(stats['total'] for stats in severity_stats.values())
     fig.update_layout(
         title=f'Model Accuracy by Severity Level (n={total_samples} samples)',
         xaxis_title='Severity Level',
         yaxis_title='Accuracy (%)',
-        height=600,
-        margin=dict(t=100, b=100),
+        showlegend=True,
         legend=dict(
-            orientation="h",
-            yanchor="bottom",
-            y=-0.3,
-            xanchor="center",
-            x=0.5,
-            bgcolor='rgba(255, 255, 255, 0.9)'
+            yanchor="top",
+            y=0.99,
+            xanchor="left",
+            x=0.01,
+            bgcolor='rgba(255, 255, 255, 0.8)'
         )
+    )
+    
+    return fig
+
+def create_performance_chart(data: List[Dict]) -> go.Figure:
+    """Create performance comparison chart"""
+    # Update models list
+    models = ['OpenAI', 'Groq-Llama', 'Groq-Mixtral', 'Claude']
+    
+    # Calculate performance stats
+    total = len(data)
+    original_perf = []
+    misspelled_perf = []
+    
+    for model_key in ['openai', 'groq_llama', 'groq_mixtral', 'claude']:
+        orig_correct = sum(1 for d in data 
+                         if d['results']['original']['model_responses'][model_key]['is_correct'])
+        misp_correct = sum(1 for d in data 
+                          if d['results']['misspelled']['model_responses'][model_key]['is_correct'])
+        
+        original_perf.append(orig_correct/total*100)
+        misspelled_perf.append(misp_correct/total*100)
+    
+    # Create figure
+    fig = go.Figure(data=[
+        go.Bar(name='Original Text', x=models, y=original_perf),
+        go.Bar(name='Misspelled Text', x=models, y=misspelled_perf)
+    ])
+    
+    fig.update_layout(
+        title='Model Performance Comparison',
+        xaxis_title='Models',
+        yaxis_title='Accuracy (%)',
+        barmode='group'
+    )
+    
+    return fig
+
+def create_robustness_chart(data: List[Dict]) -> go.Figure:
+    """Create robustness comparison chart"""
+    total = len(data)
+    models = ['OpenAI', 'Groq-Llama', 'Groq-Mixtral', 'Claude']
+    performance_drop = []
+    
+    for model_key in ['openai', 'groq_llama', 'groq_mixtral', 'claude']:
+        orig_correct = sum(1 for d in data 
+                         if d['results']['original']['model_responses'][model_key]['is_correct'])
+        misp_correct = sum(1 for d in data 
+                          if d['results']['misspelled']['model_responses'][model_key]['is_correct'])
+        
+        orig_perf = orig_correct/total*100
+        misp_perf = misp_correct/total*100
+        performance_drop.append(abs(orig_perf - misp_perf))
+    
+    fig = go.Figure(data=[
+        go.Bar(x=models, y=performance_drop)
+    ])
+    
+    fig.update_layout(
+        title='Model Robustness (Performance Drop)',
+        xaxis_title='Models',
+        yaxis_title='Performance Drop (%)',
+        yaxis=dict(autorange="reversed")  # Reverse y-axis as lower drop is better
     )
     
     return fig
