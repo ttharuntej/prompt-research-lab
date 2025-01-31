@@ -1,6 +1,7 @@
 from crewai import Agent
 from typing import Dict, Any
 import os
+import boto3
 from dotenv import load_dotenv
 from langchain.tools import Tool
 from openai import OpenAI
@@ -51,6 +52,40 @@ def get_groq_mixtral_response(prompt: str) -> str:
     )
     return response.choices[0].message.content
 
+def get_bedrock_response(prompt: str) -> str:
+    """Get response from Claude LLM via AWS Bedrock"""
+    bedrock = boto3.client('bedrock-runtime',
+                            aws_access_key_id=settings.AWS_ACCESS_KEY_ID,
+                            aws_secret_access_key=settings.AWS_SECRET_ACCESS_KEY,
+                            region_name=settings.AWS_REGION_NAME)
+
+    #input payload for the model
+    request = {
+        "anthropic_version":"bedrock-2023-05-31",
+        "max_tokens": 1000 ,
+        "messages":[
+            {
+                "role": "user",
+                "content": [{"type": "text", "text": prompt}],
+            }
+        ],
+    }
+    #convert the request to json
+    request = json.dumps(request)
+
+    #invoke the model with the request
+    response = bedrock.invoke_model_with_response_stream(
+        modelId=settings.CLAUDE_MODEL_ID,
+        body=request
+    )
+    # Extract and print the response text in real-time
+    response_text = ""
+    for event in response["body"]:
+        chunk = json.loads(event["chunk"]["bytes"])
+        if chunk["type"] == "content_block_delta":
+            response_text += chunk["delta"].get("text", "")
+    return response_text
+
 def get_claude_response(prompt: str) -> str:
     """Get response from Anthropic's Claude"""
     client = Anthropic(api_key=settings.ANTHROPIC_API_KEY)
@@ -64,26 +99,27 @@ def get_claude_response(prompt: str) -> str:
 def compare_models(prompt: str) -> Dict[str, Any]:
     """
     Compare how different models handle the same prompt
-    
+
     Args:
         prompt (str): The prompt to evaluate across models
-        
+
     Returns:
         Dict[str, Any]: Comparison results including responses and analysis
     """
     if not prompt:
         return {
-            "success": False, 
+            "success": False,
             "error": "No prompt provided"
         }
-    
+
     try:
         # Get responses from all models
         openai_resp = get_openai_response(prompt)
         groq_llama_resp = get_groq_llama_response(prompt)
         groq_mixtral_resp = get_groq_mixtral_response(prompt)
         claude_resp = get_claude_response(prompt)
-        
+        bedrock_resp = get_bedrock_response(prompt)
+
         # Analyze responses
         analysis = {
             "length_comparison": {
@@ -108,23 +144,28 @@ def compare_models(prompt: str) -> Dict[str, Any]:
                 "claude": {
                     "word_count": len(claude_resp.split()),
                     "character_count": len(claude_resp)
+                },
+                "bedrock": {
+                    "word_count": len(bedrock_resp.split()),
+                    "character_count": len(bedrock_resp)
                 }
             }
         }
-        
+
         return {
             "success": True,
             "responses": {
                 "openai": openai_resp,
                 "groq_llama": groq_llama_resp,
                 "groq_mixtral": groq_mixtral_resp,
-                "claude": claude_resp
+                "claude": claude_resp,
+                "bedrock": bedrock_resp
             },
             "analysis": analysis
         }
     except Exception as e:
         return {
-            "success": False, 
+            "success": False,
             "error": str(e)
         }
 
@@ -132,7 +173,7 @@ def compare_models(prompt: str) -> Dict[str, Any]:
 model_comparison_tool = Tool(
     name="compare_models",
     func=compare_models,
-    description="""Compares responses from different LLM models (OpenAI and Groq) 
+    description="""Compares responses from different LLM models (OpenAI and Groq)
     to analyze their interpretation and handling of the same prompt""",
     args_schema=PromptComparisonSchema
 )
@@ -141,10 +182,10 @@ model_comparison_tool = Tool(
 comparison_agent = Agent(
     role='Model Comparison Specialist',
     goal='Analyze and compare how different language models interpret and respond to prompts',
-    backstory="""You are an expert in comparative analysis of language models. 
-    Your specialty is evaluating how different models interpret and respond to the same prompts, 
-    providing insights into their strengths, weaknesses, and unique characteristics. 
-    You help researchers and developers understand the nuances between different LLMs 
+    backstory="""You are an expert in comparative analysis of language models.
+    Your specialty is evaluating how different models interpret and respond to the same prompts,
+    providing insights into their strengths, weaknesses, and unique characteristics.
+    You help researchers and developers understand the nuances between different LLMs
     and their response patterns.""",
     tools=[model_comparison_tool],
     verbose=True
