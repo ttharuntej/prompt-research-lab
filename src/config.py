@@ -5,18 +5,22 @@ class Settings(BaseSettings):
     """Application settings loaded from environment variables"""
     # Required Settings
     OPENAI_API_KEY: str
-    GROQ_API_KEY: str
+    GROQ_LLAMA_API_KEY: str    # Changed from GROQ_API_KEY
+    GROQ_MIXTRAL_API_KEY: str  # Added new key
+    ANTHROPIC_API_KEY: str
     AWS_ACCESS_KEY_ID: str
     AWS_SECRET_ACCESS_KEY: str
     AWS_REGION_NAME: str
 
     # Optional Settings with defaults
-    OPENAI_MODEL: str = "gpt-3.5-turbo"
-    GROQ_MODEL: str = "llama-3.3-70b-versatile"
+    OPENAI_MODEL: str = "gpt-4o"
+    GROQ_LLAMA_MODEL: str = "llama-3.3-70b-versatile"
+    GROQ_MIXTRAL_MODEL: str = "mixtral-8x7b-32768"
+    CLAUDE_MODEL: str = "claude-3-5-sonnet-20241022"
     CLAUDE_MODEL_ID: str = "anthropic.claude-3-5-sonnet-20240620-v1:0" #claude sonnet 3.5
     MAX_TOKENS: int = 1000
     BATCH_SIZE: int = 2
-    TOTAL_ITEMS: Optional[int] = 100  # None means process all items
+    TOTAL_ITEMS: Optional[int] = None  # None means process all items
     OUTPUT_FILE: str = "model_comparison_results.json"
 
     # New Robustness Testing Settings

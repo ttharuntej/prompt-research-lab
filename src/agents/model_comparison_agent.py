@@ -8,6 +8,7 @@ from openai import OpenAI
 import groq
 from pydantic import BaseModel, Field
 from src.config import settings  # Import settings
+from anthropic import Anthropic  # Add this import
 
 # Load environment variables
 load_dotenv()
@@ -31,13 +32,23 @@ def get_openai_response(prompt: str) -> str:
     )
     return response.choices[0].message.content
 
-def get_groq_response(prompt: str) -> str:
-    """Get response from Groq"""
-    client = groq.Groq(api_key=settings.GROQ_API_KEY)
+def get_groq_llama_response(prompt: str) -> str:
+    """Get response from Groq's Llama model"""
+    client = groq.Groq(api_key=settings.GROQ_LLAMA_API_KEY)
     response = client.chat.completions.create(
-        model=settings.GROQ_MODEL,  # Use from settings
+        model=settings.GROQ_LLAMA_MODEL,
         messages=[{"role": "user", "content": prompt}],
-        max_tokens=settings.MAX_TOKENS  # Use from settings
+        max_tokens=settings.MAX_TOKENS
+    )
+    return response.choices[0].message.content
+
+def get_groq_mixtral_response(prompt: str) -> str:
+    """Get response from Groq's Mixtral model"""
+    client = groq.Groq(api_key=settings.GROQ_MIXTRAL_API_KEY)
+    response = client.chat.completions.create(
+        model=settings.GROQ_MIXTRAL_MODEL,
+        messages=[{"role": "user", "content": prompt}],
+        max_tokens=settings.MAX_TOKENS
     )
     return response.choices[0].message.content
 
@@ -75,6 +86,16 @@ def get_bedrock_response(prompt: str) -> str:
             response_text += chunk["delta"].get("text", "")
     return response_text
 
+def get_claude_response(prompt: str) -> str:
+    """Get response from Anthropic's Claude"""
+    client = Anthropic(api_key=settings.ANTHROPIC_API_KEY)
+    response = client.messages.create(
+        model=settings.CLAUDE_MODEL,  # We'll add this to settings
+        messages=[{"role": "user", "content": prompt}],
+        max_tokens=settings.MAX_TOKENS
+    )
+    return response.content[0].text
+
 def compare_models(prompt: str) -> Dict[str, Any]:
     """
     Compare how different models handle the same prompt
@@ -92,25 +113,37 @@ def compare_models(prompt: str) -> Dict[str, Any]:
         }
 
     try:
-        # Get responses from both models
+        # Get responses from all models
         openai_resp = get_openai_response(prompt)
-        groq_resp = get_groq_response(prompt)
+        groq_llama_resp = get_groq_llama_response(prompt)
+        groq_mixtral_resp = get_groq_mixtral_response(prompt)
+        claude_resp = get_claude_response(prompt)
         bedrock_resp = get_bedrock_response(prompt)
 
         # Analyze responses
         analysis = {
             "length_comparison": {
                 "openai": len(openai_resp),
-                "groq": len(groq_resp)
+                "groq_llama": len(groq_llama_resp),
+                "groq_mixtral": len(groq_mixtral_resp),
+                "claude": len(claude_resp)
             },
             "response_characteristics": {
                 "openai": {
                     "word_count": len(openai_resp.split()),
                     "character_count": len(openai_resp)
                 },
-                "groq": {
-                    "word_count": len(groq_resp.split()),
-                    "character_count": len(groq_resp)
+                "groq_llama": {
+                    "word_count": len(groq_llama_resp.split()),
+                    "character_count": len(groq_llama_resp)
+                },
+                "groq_mixtral": {
+                    "word_count": len(groq_mixtral_resp.split()),
+                    "character_count": len(groq_mixtral_resp)
+                },
+                "claude": {
+                    "word_count": len(claude_resp.split()),
+                    "character_count": len(claude_resp)
                 },
                 "bedrock": {
                     "word_count": len(bedrock_resp.split()),
@@ -123,7 +156,9 @@ def compare_models(prompt: str) -> Dict[str, Any]:
             "success": True,
             "responses": {
                 "openai": openai_resp,
-                "groq": groq_resp,
+                "groq_llama": groq_llama_resp,
+                "groq_mixtral": groq_mixtral_resp,
+                "claude": claude_resp,
                 "bedrock": bedrock_resp
             },
             "analysis": analysis

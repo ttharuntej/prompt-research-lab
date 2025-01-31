@@ -1,0 +1,65 @@
+/* Print styles */
+@media print {
+    .export-button { display: none; }
+    @page { size: portrait; margin: 1cm; }
+    .chart-container { 
+        page-break-inside: avoid;
+        break-inside: avoid;
+        height: 80vh;
+    }
+    .summary-container {
+        page-break-before: avoid;
+        page-break-after: always;
+    }
+}
+
+/* Mobile styles */
+@media screen and (max-width: 768px) {
+    .chart-container { height: 400px; }
+    .summary-container { 
+        margin: 10px;
+        padding: 10px;
+        font-size: 14px;
+    }
+}
+
+/* General styles */
+body {
+    font-family: Arial, sans-serif;
+    margin: 0;
+    padding: 0;
+}
+
+.chart-container {
+    margin: 0;
+    padding: 10px;
+    height: 500px;
+    width: 100%;
+}
+
+.summary-container {
+    margin: 20px;
+    padding: 20px;
+    background-color: #f5f5f5;
+    border-radius: 5px;
+    white-space: pre-wrap;
+    font-family: monospace;
+    overflow-x: auto;
+}
+
+.print-button {
+    position: fixed;
+    top: 20px;
+    right: 20px;
+    padding: 10px 20px;
+    background-color: #4CAF50;
+    color: white;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 16px;
+}
+
+.print-button:hover {
+    background-color: #45a049;
+} 
